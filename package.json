@@ -1,0 +1,26 @@
+{
+  "name": "mindvault-remotion",
+  "version": "2.0.0",
+  "description": "MindVault Remotion Render Service — Cloud video rendering with animated captions",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs",
+    "render": "node render.mjs",
+    "batch": "node batch_render.mjs",
+    "studio": "npx remotion studio"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@remotion/bundler": "^4.0.447",
+    "@remotion/cli": "^4.0.447",
+    "@remotion/renderer": "^4.0.447",
+    "@remotion/transitions": "^4.0.447",
+    "express": "^4.21.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "remotion": "^4.0.447"
+  }
+}

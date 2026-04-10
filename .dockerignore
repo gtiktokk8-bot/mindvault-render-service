@@ -1,0 +1,7 @@
+node_modules
+out
+rendered
+.git
+*.md
+sample_week.json
+batch_render.mjs

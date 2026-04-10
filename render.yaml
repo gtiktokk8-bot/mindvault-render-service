@@ -1,0 +1,16 @@
+# Render.com deployment config
+services:
+  - type: web
+    name: mindvault-remotion-render
+    runtime: docker
+    plan: starter  # $7/month — 512MB RAM, shared CPU (minimum for Remotion)
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NODE_ENV
+        value: production
+      - key: RENDER_CONCURRENCY
+        value: 1  # Keep low on starter plan
+    healthCheckPath: /
+    autoDeploy: true
