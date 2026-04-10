@@ -69,7 +69,21 @@ async function ensureBundle() {
   try {
     bundleLocation = await bundle({
       entryPoint: path.resolve(__dirname, "src/index.js"),
-      webpackOverride: (config) => config,
+      webpackOverride: (config) => ({
+        ...config,
+        resolve: {
+          ...config.resolve,
+          extensions: [".js", ".jsx", ".ts", ".tsx", ".json"],
+          fullySpecified: false,
+        },
+        module: {
+          ...config.module,
+          rules: [
+            ...(config.module?.rules || []),
+            { test: /\.m?js/, resolve: { fullySpecified: false } },
+          ],
+        },
+      }),
     });
 
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
