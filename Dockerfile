@@ -20,6 +20,7 @@ RUN apt-get update && apt-get install -y \
     libcairo2 \
     libasound2 \
     ffmpeg \
+    curl \
     --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
@@ -27,16 +28,21 @@ RUN apt-get update && apt-get install -y \
 ENV CHROME_PATH=/usr/bin/chromium
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV NODE_ENV=production
-ENV RENDER_CONCURRENCY=2
+# Use concurrency 1 to stay within 512MB memory
+ENV RENDER_CONCURRENCY=1
 
 WORKDIR /app
 
-# Copy package files and install
+# Copy package files and install ALL deps (need devDeps for bundling)
 COPY package.json ./
-RUN npm install --production
+RUN npm install
 
 # Copy source
 COPY . .
+
+# === PRE-BUNDLE DURING BUILD ===
+# This runs webpack at build time (plenty of RAM) instead of runtime (512MB)
+RUN node prebundle.mjs
 
 # Create rendered videos directory
 RUN mkdir -p rendered
@@ -45,7 +51,7 @@ RUN mkdir -p rendered
 EXPOSE 3000
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:3000/ || exit 1
 
 # Start server

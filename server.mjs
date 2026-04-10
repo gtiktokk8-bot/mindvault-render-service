@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * MindVault Remotion Render Server
+ * MindVault Remotion Render Server v2.1
  *
- * Cloud render service that accepts video render requests via HTTP,
- * renders using Remotion, uploads to cloud storage, and returns a URL.
+ * Uses pre-built bundle from Docker build step (saves ~500MB RAM at runtime).
+ * Falls back to runtime bundling if no pre-built bundle found.
  *
  * API:
  *   POST /render
@@ -38,30 +38,50 @@ const PORT = process.env.PORT || 3000;
 // Increase JSON body limit for base64 audio payloads (~2MB)
 app.use(express.json({ limit: "10mb" }));
 
-// Pre-bundle on startup for faster renders
+// Bundle location — check for pre-built bundle first
 let bundleLocation = null;
 let bundling = false;
+
+function loadPrebuiltBundle() {
+  const locationFile = path.resolve(__dirname, ".bundle-location");
+  if (fs.existsSync(locationFile)) {
+    const loc = fs.readFileSync(locationFile, "utf-8").trim();
+    if (fs.existsSync(loc)) {
+      console.log(`📦 Using pre-built bundle: ${loc}`);
+      bundleLocation = loc;
+      return true;
+    }
+  }
+  return false;
+}
 
 async function ensureBundle() {
   if (bundleLocation) return bundleLocation;
   if (bundling) {
-    // Wait for in-progress bundle
     while (bundling) await new Promise((r) => setTimeout(r, 500));
     return bundleLocation;
   }
 
   bundling = true;
-  console.log("📦 Pre-bundling Remotion project...");
+  console.log("📦 Runtime bundling Remotion project (no pre-built bundle found)...");
   const start = Date.now();
 
-  bundleLocation = await bundle({
-    entryPoint: path.resolve(__dirname, "src/index.js"),
-    webpackOverride: (config) => config,
-  });
+  try {
+    bundleLocation = await bundle({
+      entryPoint: path.resolve(__dirname, "src/index.js"),
+      webpackOverride: (config) => config,
+    });
 
-  const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-  console.log(`✅ Bundle ready (${elapsed}s)`);
-  bundling = false;
+    const elapsed = ((Date.now() - start) / 1000).toFixed(1);
+    console.log(`✅ Bundle ready (${elapsed}s)`);
+  } catch (err) {
+    console.error("❌ Bundle failed:", err.message);
+    bundleLocation = null;
+    throw err;
+  } finally {
+    bundling = false;
+  }
+
   return bundleLocation;
 }
 
@@ -81,7 +101,7 @@ function getThemeForPillar(pillar) {
 app.get("/", (req, res) => {
   res.json({
     service: "mindvault-remotion-render",
-    version: "2.0.0",
+    version: "2.1.0",
     status: "ok",
     bundled: !!bundleLocation,
     uptime: process.uptime(),
@@ -163,7 +183,7 @@ app.post("/render", async (req, res) => {
     // Output file
     const outputPath = path.join(os.tmpdir(), `mv-render-${requestId}.mp4`);
 
-    // Render
+    // Render — use concurrency 1 to stay within memory limits
     console.log(`  🔧 Rendering ${durationInFrames} frames...`);
     let lastLoggedPct = 0;
     await renderMedia({
@@ -172,17 +192,20 @@ app.post("/render", async (req, res) => {
       codec: "h264",
       outputLocation: outputPath,
       inputProps,
-      concurrency: parseInt(process.env.RENDER_CONCURRENCY || "2", 10),
+      concurrency: parseInt(process.env.RENDER_CONCURRENCY || "1", 10),
       imageFormat: "jpeg",
-      jpegQuality: 85,
+      jpegQuality: 80,
       pixelFormat: "yuv420p",
-      crf: 23,
+      crf: 25,
       chromiumOptions: {
         args: [
           "--no-sandbox",
           "--disable-setuid-sandbox",
           "--disable-dev-shm-usage",
           "--disable-gpu",
+          "--single-process",
+          "--no-zygote",
+          "--disable-extensions",
         ],
       },
       onProgress: ({ progress }) => {
@@ -200,8 +223,7 @@ app.post("/render", async (req, res) => {
 
     console.log(`  ✅ Render complete: ${fileSizeMB}MB in ${renderTime}s`);
 
-    // Serve the file directly (for Render.com free tier without S3)
-    // The file will be served at /videos/{requestId}.mp4
+    // Serve the file directly
     const videoDir = path.join(__dirname, "rendered");
     if (!fs.existsSync(videoDir)) fs.mkdirSync(videoDir, { recursive: true });
 
@@ -259,17 +281,19 @@ app.use("/videos", express.static(path.join(__dirname, "rendered"), {
 
 // === STARTUP ===
 app.listen(PORT, async () => {
-  console.log(`\n🚀 MindVault Remotion Render Server`);
+  console.log(`\n🚀 MindVault Remotion Render Server v2.1`);
   console.log(`   Port: ${PORT}`);
   console.log(`   Node: ${process.version}`);
   console.log(`   Env:  ${process.env.NODE_ENV || "development"}\n`);
 
-  // Pre-bundle on startup
-  try {
-    await ensureBundle();
-  } catch (err) {
-    console.error("⚠️  Pre-bundle failed (will retry on first request):", err.message);
-    bundleLocation = null;
-    bundling = false;
+  // Try to load pre-built bundle first
+  if (!loadPrebuiltBundle()) {
+    // Fall back to runtime bundling
+    try {
+      await ensureBundle();
+    } catch (err) {
+      console.error("⚠️  No pre-built bundle and runtime bundle failed:", err.message);
+      console.error("   Renders will fail until bundling succeeds.");
+    }
   }
 });
