@@ -149,12 +149,18 @@ app.post("/render", async (req, res) => {
     // Determine theme
     const theme = requestedTheme || getThemeForPillar(pillar);
 
-    // Write audio to temp file if provided
-    let audioPath = null;
+    // Write audio to served directory so Remotion can access it via HTTP
+    // (Remotion only supports http:// and https://, not file://)
+    let audioUrl = null;
     if (audio_base64) {
-      audioPath = path.join(os.tmpdir(), `mv-audio-${requestId}.mp3`);
+      const audioDir = path.join(__dirname, "rendered");
+      if (!fs.existsSync(audioDir)) fs.mkdirSync(audioDir, { recursive: true });
+      const audioFile = `audio-${requestId}.mp3`;
+      const audioPath = path.join(audioDir, audioFile);
       fs.writeFileSync(audioPath, Buffer.from(audio_base64, "base64"));
       console.log(`  📝 Audio saved: ${audioPath} (${(fs.statSync(audioPath).size / 1024).toFixed(0)}KB)`);
+      // Serve via localhost so Remotion can fetch it
+      audioUrl = `http://localhost:${PORT}/videos/${audioFile}`;
     }
 
     // Calculate duration from script lines (3.5s per line + 5s overhead)
@@ -166,7 +172,7 @@ app.post("/render", async (req, res) => {
     // Prepare props
     const inputProps = {
       brollUrl: broll_url || "",
-      audioUrl: audioPath ? `file://${audioPath}` : "",
+      audioUrl: audioUrl || "",
       scriptLines: script_lines.filter((l) => l.trim()),
       title: title,
       theme: theme,
@@ -250,14 +256,16 @@ app.post("/render", async (req, res) => {
     const protocol = req.headers["x-forwarded-proto"] || "https";
     const videoUrl = `${protocol}://${host}/videos/${requestId}.mp4`;
 
-    // Clean up audio temp file
-    if (audioPath && fs.existsSync(audioPath)) fs.unlinkSync(audioPath);
-
-    // Schedule cleanup of rendered video after 30 minutes
+    // Schedule cleanup of rendered video and audio after 30 minutes
     setTimeout(() => {
       if (fs.existsSync(publicPath)) {
         fs.unlinkSync(publicPath);
         console.log(`🗑️  Cleaned up: ${requestId}.mp4`);
+      }
+      const audioCleanup = path.join(__dirname, "rendered", `audio-${requestId}.mp3`);
+      if (fs.existsSync(audioCleanup)) {
+        fs.unlinkSync(audioCleanup);
+        console.log(`🗑️  Cleaned up: audio-${requestId}.mp3`);
       }
     }, 30 * 60 * 1000);
 
