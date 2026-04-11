@@ -242,7 +242,8 @@ app.post("/render", async (req, res) => {
     if (!fs.existsSync(videoDir)) fs.mkdirSync(videoDir, { recursive: true });
 
     const publicPath = path.join(videoDir, `${requestId}.mp4`);
-    fs.renameSync(outputPath, publicPath);
+    fs.copyFileSync(outputPath, publicPath);
+    fs.unlinkSync(outputPath);
 
     // Construct public URL
     const host = req.headers.host || `localhost:${PORT}`;
