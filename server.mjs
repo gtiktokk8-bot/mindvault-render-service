@@ -29,6 +29,7 @@ import path from "path";
 import fs from "fs";
 import os from "os";
 import crypto from "crypto";
+import https from "https";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -301,6 +302,73 @@ app.use("/videos", express.static(path.join(__dirname, "rendered"), {
     res.set("Accept-Ranges", "bytes");
   },
 }));
+
+// === RELAY: streams GitHub Releases assets through our domain so Buffer's
+// IG/YT fetcher gets a clean 200 response without the github.com → S3 redirect
+// chain it chokes on. Stateless (no disk needed). Supports GET + HEAD. ===
+function relayHandler(method) {
+  return (req, res) => {
+    const filename = req.params.filename || "";
+    if (!/^[A-Za-z0-9._-]+\.(mp4|jpg|jpeg|png|webm|mov|gif)$/i.test(filename)) {
+      return res.status(400).json({ error: "invalid filename" });
+    }
+    const ghUrl = `https://github.com/gtiktokk8-bot/mindvault-render-service/releases/download/mv-cdn-v1/${encodeURIComponent(filename)}`;
+
+    const fetch = (url, redirectsLeft = 6) => {
+      const opts = {
+        method,
+        headers: { "User-Agent": "mindvault-relay/1.0", "Accept": "*/*" },
+      };
+      const reqUp = https.request(url, opts, (upstream) => {
+        if (
+          upstream.statusCode >= 300 &&
+          upstream.statusCode < 400 &&
+          upstream.headers.location
+        ) {
+          if (redirectsLeft <= 0) {
+            res.status(502).end(method === "GET" ? "too many redirects" : "");
+            upstream.resume();
+            return;
+          }
+          upstream.resume();
+          return fetch(upstream.headers.location, redirectsLeft - 1);
+        }
+        // Pass through critical headers
+        const ct = (upstream.headers["content-type"] || "").toLowerCase();
+        if (ct) res.set("Content-Type", ct);
+        else if (filename.toLowerCase().endsWith(".mp4")) res.set("Content-Type", "video/mp4");
+        else if (filename.toLowerCase().match(/\.(jpg|jpeg)$/)) res.set("Content-Type", "image/jpeg");
+        else if (filename.toLowerCase().endsWith(".png")) res.set("Content-Type", "image/png");
+
+        if (upstream.headers["content-length"]) {
+          res.set("Content-Length", upstream.headers["content-length"]);
+        }
+        res.set("Accept-Ranges", "bytes");
+        res.set("Cache-Control", "public, max-age=86400");
+        res.status(upstream.statusCode);
+
+        if (method === "HEAD") {
+          res.end();
+          upstream.resume();
+        } else {
+          upstream.pipe(res);
+        }
+      });
+      reqUp.on("error", (err) => {
+        console.error(`[relay] error fetching ${url}: ${err.message}`);
+        if (!res.headersSent) {
+          res.status(502).json({ error: err.message });
+        }
+      });
+      reqUp.end();
+    };
+
+    fetch(ghUrl);
+  };
+}
+
+app.get("/relay/:filename", relayHandler("GET"));
+app.head("/relay/:filename", relayHandler("HEAD"));
 
 // === STARTUP ===
 app.listen(PORT, async () => {
