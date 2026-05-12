@@ -18,7 +18,7 @@ const defaultReelProps = {
   monetization: {
     type: "stripe",
     text: "🔗 27 Dark Psychology Tactics — Link in bio",
-    url: "https://buy.stripe.com/5kQeV66P5g6hdpp4rA1sQ03",
+    url: "https://buy.stripe.com/bJebIUehx2frgBBe2a1sQ00",
   },
   theme: "dark",           // "dark" | "gold" | "stoic" | "fire"
   pillar: "psychology",    // stoicism | habits | psychology | focus | productivity
@@ -34,7 +34,7 @@ const defaultQuoteProps = {
   monetization: {
     type: "amazon",
     text: "📖 Get Meditations by Marcus Aurelius",
-    url: "https://www.amazon.com/Meditations-New-Translation-Marcus-Aurelius/dp/0812968255?tag=mindvault-20",
+    url: "https://www.amazon.com/Meditations-New-Translation-Marcus-Aurelius/dp/0812968255?tag=mindvault07-20",
   },
 };
 
@@ -53,7 +53,7 @@ const defaultListProps = {
   monetization: {
     type: "amazon",
     text: "📚 Get all 5 — Links in bio #ad",
-    url: "https://www.amazon.com/Meditations-New-Translation-Marcus-Aurelius/dp/0812968255?tag=mindvault-20",
+    url: "https://www.amazon.com/Meditations-New-Translation-Marcus-Aurelius/dp/0812968255?tag=mindvault07-20",
   },
 };
 
@@ -71,7 +71,7 @@ const defaultHookProps = {
   monetization: {
     type: "stripe",
     text: "🧠 27 Dark Psychology Tactics — Link in bio",
-    url: "https://buy.stripe.com/5kQeV66P5g6hdpp4rA1sQ03",
+    url: "https://buy.stripe.com/bJebIUehx2frgBBe2a1sQ00",
   },
 };
 
@@ -89,7 +89,7 @@ const defaultAutoPipelineProps = {
   theme: "dark",
   pillar: "psychology",
   stripeCta: "27 Dark Psychology Tactics — Link in bio",
-  stripeUrl: "https://buy.stripe.com/5kQeV66P5g6hdpp4rA1sQ03",
+  stripeUrl: "https://buy.stripe.com/bJebIUehx2frgBBe2a1sQ00",
 };
 
 // 30fps × 30s = 900 frames (safe under 58s limit)
